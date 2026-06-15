@@ -1,5 +1,7 @@
 ---
-title: "Project_1"
+title: "ST558 Project 1 - Summer 2026"
 format: html
+author: "Evan Whitfield"
 ---
 
+Just getting started.
