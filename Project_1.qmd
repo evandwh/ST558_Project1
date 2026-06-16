@@ -5,3 +5,55 @@ author: "Evan Whitfield"
 ---
 
 Just getting started.
+
+```{r}
+#| warning: False
+library(httr)
+library(jsonlite)
+library(curl)
+library(dplyr)
+
+key <- "70c77fa9cc244f5a9fb3c46ed731835d132c0670"
+```
+
+Let's do a quick test!
+```{r}
+url <- paste0("https://api.census.gov/data/2022/acs/acs1/pums?get=SEX,PWGTP,MAR&SCHL=24&key=", key)
+
+response <- GET(url, timeout(120))
+parsed <- fromJSON(rawToChar(response$content))
+data <- as_tibble(parsed[-1, ])
+colnames(data) <- parsed[1, ]
+
+str(data)
+```
+Now, these should not be character columns. We will fix that later if/when needed once we get our function running! Let's build that function.
+
+```{r}
+helper_fun <- function(year = 2022, 
+                       num_vars = c("AGEP", "PWGTP"), 
+                       cat_vars = c("SEX")) {
+  if (year > 2022 || year < 2010) {
+    stop("Year must be between 2010 and 2022, inclusive.")
+  }
+  if (!("PWGTP" %in% num_vars)) {
+    num_vars <- c(num_vars, "PWGTP")
+  }
+  for (k in num_vars) {
+    if (!(k %in% c("AGEP", "GASP", "GRPIP", "JWAP", "JWDP", "JWMNP", "PWGTP"))) {
+      stop("Please choose only valid options for num_vars.")
+    }
+  }
+  for (k in cat_vars) {
+    if (!(k %in% c("FER", "HHL", "SCH", "SCHL", "SEX"))) {
+      stop("Please choose only valid options for cat_vars.")
+    }
+  }
+  print(year)
+  print(num_vars)
+  print(cat_vars)
+}
+
+helper_fun(2021)
+```
+
