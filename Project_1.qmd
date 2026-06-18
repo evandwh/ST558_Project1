@@ -12,6 +12,8 @@ library(httr)
 library(jsonlite)
 library(curl)
 library(dplyr)
+library(stringr)
+library(lubridate)
 
 key <- "70c77fa9cc244f5a9fb3c46ed731835d132c0670"
 ```
@@ -629,5 +631,32 @@ jwdp_time_lookup <- c(
 
 names(jwdp_time_lookup) <- sprintf("%03d", c(1:150, 0))
 head(jwdp_time_lookup)
+```
+
+```{r}
+interval_midpoint <- function(time_string) {
+
+  pieces <- str_split(time_string, " to ", simplify = TRUE)
+
+  start <- str_trim(pieces[1])
+  end <- str_trim(pieces[2])
+  
+  start <- str_replace_all(start, " a.m.", " AM")
+  start <- str_replace_all(start, " p.m.", " PM")
+  
+  end <- str_replace_all(end, " a.m.", " AM")
+  end <- str_replace_all(end, " p.m.", " PM")
+  
+  start_time <- parse_date_time(start, orders = "I:M p")
+  end_time <- parse_date_time(end, orders = "I:M p")
+  
+  start_just_time <- format(start_time, "%H:%M:%S")
+  end_just_time <- format(end_time, "%H:%M:%S")
+
+  midpoint <- (start_just_time + end_just_time) / 2
+  midpoint
+}
+
+interval_midpoint("10:20 p.m. to 10:24 p.m.")
 ```
 
