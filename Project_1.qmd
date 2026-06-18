@@ -18,6 +18,7 @@ key <- "70c77fa9cc244f5a9fb3c46ed731835d132c0670"
 
 Let's do a quick test!
 ```{r}
+#| warning: False
 url <- paste0("https://api.census.gov/data/2022/acs/acs1/pums?get=SEX,PWGTP,MAR&SCHL=24&key=", key)
 
 response <- GET(url, timeout(120))
@@ -27,17 +28,103 @@ colnames(data) <- parsed[1, ]
 
 str(data)
 ```
+
+
+```{r}
+help_help <- function(raw_data) {
+  parsed <- fromJSON(rawToChar(raw_data$content))
+  data <- as_tibble(parsed[-1, ])
+  colnames(data) <- parsed[1, ]
+  data
+}
+```
+
+
+```{r}
+help_help_codes <- function(geo, geo_name) {
+  state_fips <- c(
+    AL = "01", AK = "02", AZ = "04", AR = "05", CA = "06",
+    CO = "08", CT = "09", DE = "10", DC = "11", FL = "12",
+    GA = "13", HI = "15", ID = "16", IL = "17", IN = "18",
+    IA = "19", KS = "20", KY = "21", LA = "22", ME = "23",
+    MD = "24", MA = "25", MI = "26", MN = "27", MS = "28",
+    MO = "29", MT = "30", NE = "31", NV = "32", NH = "33",
+    NJ = "34", NM = "35", NY = "36", NC = "37", ND = "38",
+    OH = "39", OK = "40", OR = "41", PA = "42", RI = "44",
+    SC = "45", SD = "46", TN = "47", TX = "48", UT = "49",
+    VT = "50", VA = "51", WA = "53", WV = "54", WI = "55",
+    WY = "56"
+  )
+  region_codes <- c(
+    Northeast = "1",
+    Midwest   = "2",
+    South     = "3",
+    West      = "4"
+  )
+  division_codes <- c(
+    New_England        = "1",
+    Middle_Atlantic    = "2",
+    East_North_Central = "3",
+    West_North_Central = "4",
+    South_Atlantic     = "5",
+    East_South_Central = "6",
+    West_South_Central = "7",
+    Mountain           = "8",
+    Pacific            = "9"
+  )
+  if (geo == "STATE") {
+    if ((geo_name %in% names(state_fips))) {
+      code <- state_fips[[geo_name]]
+    } else if (geo_name %in% state_fips) {
+      code <- geo_name
+    } else {
+      stop("State code not found")
+    }
+  } else if (geo == "REGION") {
+    if (geo_name %in% names(region_codes)) {
+      code <- region_codes[[geo_name]]
+    } else if (geo_name %in% region_codes) {
+      code <- geo_name
+    } else {
+      stop("Region code not found")
+    }
+  } else if (geo == "DIVISION") {
+    if (geo_name %in% names(division_codes)) {
+      code <- division_codes[[geo_name]]
+    } else if (geo_name %in% division_codes) {
+      code <- geo_name
+    } else {
+      stop("Division code not found")
+    }
+  } else {
+    stop("Invalid input. Incorrect geograph type.")
+  }
+  code
+}
+
+help_help_codes("STATE", "NC")
+help_help_codes("REGION", "NC")
+```
 Now, these should not be character columns. We will fix that later if/when needed once we get our function running! Let's build that function.
 
 ```{r}
 helper_fun <- function(year = 2022, 
-                       num_vars = c("AGEP", "PWGTP"), 
-                       cat_vars = c("SEX")) {
+                       num_vars = c("AGEP", "PWGTP"),  #AGEP and PWGTP by default
+                       cat_vars = c("SEX"), #SEX by default
+                       geo = "STATE",       #State by default
+                       geo_name = "NC",
+                       key = "70c77fa9cc244f5a9fb3c46ed731835d132c0670") {   #North Carolina by default
+  num_vars <- toupper(num_vars)
+  cat_vars <- toupper(cat_vars)
+  geo <- toupper(geo)
   if (year > 2022 || year < 2010) {
     stop("Year must be between 2010 and 2022, inclusive.")
   }
   if (!("PWGTP" %in% num_vars)) {
-    num_vars <- c(num_vars, "PWGTP")
+    num_vars <- c(num_vars, "PWGTP")  #Always want PWGTP
+  }
+  if (length(num_vars) <= 1) {
+    stop("Please provide more than one numerical variable.")
   }
   for (k in num_vars) {
     if (!(k %in% c("AGEP", "GASP", "GRPIP", "JWAP", "JWDP", "JWMNP", "PWGTP"))) {
@@ -49,11 +136,498 @@ helper_fun <- function(year = 2022,
       stop("Please choose only valid options for cat_vars.")
     }
   }
-  print(year)
-  print(num_vars)
-  print(cat_vars)
+  if (length(cat_vars) == 0) {  #Must have at least one categorical variable.
+    stop("Must have at least one categorical variable.")
+  }
+  if (!(is.null(geo))) {
+    if (!(toupper(geo) %in% c("REGION", "DIVISION", "STATE"))) {
+      stop("Incorrect Geography provided")
+    }
+    geo_string <- paste0("&for=",geo)
+  } else {
+    geo_string <- ""
+  }
+  if ((geo_string == "") && (!(is.null(geo_name)))) {
+    stop("Cannot give a location without a specificed geography type")
+  }
+  if (geo_name == "ALL") {
+    code <- "*"
+  }
+  else {
+    code <- help_help_codes(geo, geo_name)
+  }
+  geo_string <- paste0(geo_string,":",code)
+  num_string <- paste(num_vars, collapse = ",")
+  cat_string <- paste(cat_vars, collapse = ",")
+  url <- paste0("https://api.census.gov/data/",
+                year,
+                "/acs/acs1/pums?get=",
+                cat_string,
+                ",", #cat_var and num_var always have at least one element
+                num_string,
+                geo_string,
+                "&key=",
+                key)
+  print(url)
+  results <- GET(url)
 }
 
-helper_fun(2021)
+helper_fun(2021, geo = "Region", geo_name = "South")
+```
+
+```{r}
+help_help(helper_fun(2021, num_vars = c("JWAP", "JWDP")))
+```
+
+```{r}
+jwap_time_lookup <- c(
+    "12:00 a.m. to 12:04 a.m.",
+    "12:05 a.m. to 12:09 a.m.",
+    "12:10 a.m. to 12:14 a.m.",
+    "12:15 a.m. to 12:19 a.m.",
+    "12:20 a.m. to 12:24 a.m.",
+    "12:25 a.m. to 12:29 a.m.",
+    "12:30 a.m. to 12:39 a.m.",
+    "12:40 a.m. to 12:44 a.m.",
+    "12:45 a.m. to 12:49 a.m.",
+    "12:50 a.m. to 12:59 a.m.",
+    "1:00 a.m. to 1:04 a.m.",
+    "1:05 a.m. to 1:09 a.m.",
+    "1:10 a.m. to 1:14 a.m.",
+    "1:15 a.m. to 1:19 a.m.",
+    "1:20 a.m. to 1:24 a.m.",
+    "1:25 a.m. to 1:29 a.m.",
+    "1:30 a.m. to 1:34 a.m.",
+    "1:35 a.m. to 1:39 a.m.",
+    "1:40 a.m. to 1:44 a.m.",
+    "1:45 a.m. to 1:49 a.m.",
+    "1:50 a.m. to 1:59 a.m.",
+    "2:00 a.m. to 2:04 a.m.",
+    "2:05 a.m. to 2:09 a.m.",
+    "2:10 a.m. to 2:14 a.m.",
+    "2:15 a.m. to 2:19 a.m.",
+    "2:20 a.m. to 2:24 a.m.",
+    "2:25 a.m. to 2:29 a.m.",
+    "2:30 a.m. to 2:34 a.m.",
+    "2:35 a.m. to 2:39 a.m.",
+    "2:40 a.m. to 2:44 a.m.",
+    "2:45 a.m. to 2:49 a.m.",
+    "2:50 a.m. to 2:54 a.m.",
+    "2:55 a.m. to 2:59 a.m.",
+    "3:00 a.m. to 3:04 a.m.",
+    "3:05 a.m. to 3:09 a.m.",
+    "3:10 a.m. to 3:14 a.m.",
+    "3:15 a.m. to 3:19 a.m.",
+    "3:20 a.m. to 3:24 a.m.",
+    "3:25 a.m. to 3:29 a.m.",
+    "3:30 a.m. to 3:34 a.m.",
+    "3:35 a.m. to 3:39 a.m.",
+    "3:40 a.m. to 3:44 a.m.",
+    "3:45 a.m. to 3:49 a.m.",
+    "3:50 a.m. to 3:54 a.m.",
+    "3:55 a.m. to 3:59 a.m.",
+    "4:00 a.m. to 4:04 a.m.",
+    "4:05 a.m. to 4:09 a.m.",
+    "4:10 a.m. to 4:14 a.m.",
+    "4:15 a.m. to 4:19 a.m.",
+    "4:20 a.m. to 4:24 a.m.",
+    "4:25 a.m. to 4:29 a.m.",
+    "4:30 a.m. to 4:34 a.m.",
+    "4:35 a.m. to 4:39 a.m.",
+    "4:40 a.m. to 4:44 a.m.",
+    "4:45 a.m. to 4:49 a.m.",
+    "4:50 a.m. to 4:54 a.m.",
+    "4:55 a.m. to 4:59 a.m.",
+    "5:00 a.m. to 5:04 a.m.",
+    "5:05 a.m. to 5:09 a.m.",
+    "5:10 a.m. to 5:14 a.m.",
+    "5:15 a.m. to 5:19 a.m.",
+    "5:20 a.m. to 5:24 a.m.",
+    "5:25 a.m. to 5:29 a.m.",
+    "5:30 a.m. to 5:34 a.m.",
+    "5:35 a.m. to 5:39 a.m.",
+    "5:40 a.m. to 5:44 a.m.",
+    "5:45 a.m. to 5:49 a.m.",
+    "5:50 a.m. to 5:54 a.m.",
+    "5:55 a.m. to 5:59 a.m.",
+    "6:00 a.m. to 6:04 a.m.",
+    "6:05 a.m. to 6:09 a.m.",
+    "6:10 a.m. to 6:14 a.m.",
+    "6:15 a.m. to 6:19 a.m.",
+    "6:20 a.m. to 6:24 a.m.",
+    "6:25 a.m. to 6:29 a.m.",
+    "6:30 a.m. to 6:34 a.m.",
+    "6:35 a.m. to 6:39 a.m.",
+    "6:40 a.m. to 6:44 a.m.",
+    "6:45 a.m. to 6:49 a.m.",
+    "6:50 a.m. to 6:54 a.m.",
+    "6:55 a.m. to 6:59 a.m.",
+    "7:00 a.m. to 7:04 a.m.",
+    "7:05 a.m. to 7:09 a.m.",
+    "7:10 a.m. to 7:14 a.m.",
+    "7:15 a.m. to 7:19 a.m.",
+    "7:20 a.m. to 7:24 a.m.",
+    "7:25 a.m. to 7:29 a.m.",
+    "7:30 a.m. to 7:34 a.m.",
+    "7:35 a.m. to 7:39 a.m.",
+    "7:40 a.m. to 7:44 a.m.",
+    "7:45 a.m. to 7:49 a.m.",
+    "7:50 a.m. to 7:54 a.m.",
+    "7:55 a.m. to 7:59 a.m.",
+    "8:00 a.m. to 8:04 a.m.",
+    "8:05 a.m. to 8:09 a.m.",
+    "8:10 a.m. to 8:14 a.m.",
+    "8:15 a.m. to 8:19 a.m.",
+    "8:20 a.m. to 8:24 a.m.",
+    "8:25 a.m. to 8:29 a.m.",
+    "8:30 a.m. to 8:34 a.m.",
+    "8:35 a.m. to 8:39 a.m.",
+    "8:40 a.m. to 8:44 a.m.",
+    "8:45 a.m. to 8:49 a.m.",
+    "8:50 a.m. to 8:54 a.m.",
+    "8:55 a.m. to 8:59 a.m.",
+    "9:00 a.m. to 9:04 a.m.",
+    "9:05 a.m. to 9:09 a.m.",
+    "9:10 a.m. to 9:14 a.m.",
+    "9:15 a.m. to 9:19 a.m.",
+    "9:20 a.m. to 9:24 a.m.",
+    "9:25 a.m. to 9:29 a.m.",
+    "9:30 a.m. to 9:34 a.m.",
+    "9:35 a.m. to 9:39 a.m.",
+    "9:40 a.m. to 9:44 a.m.",
+    "9:45 a.m. to 9:49 a.m.",
+    "9:50 a.m. to 9:54 a.m.",
+    "9:55 a.m. to 9:59 a.m.",
+    "10:00 a.m. to 10:04 a.m.",
+    "10:05 a.m. to 10:09 a.m.",
+    "10:10 a.m. to 10:14 a.m.",
+    "10:15 a.m. to 10:19 a.m.",
+    "10:20 a.m. to 10:24 a.m.",
+    "10:25 a.m. to 10:29 a.m.",
+    "10:30 a.m. to 10:34 a.m.",
+    "10:35 a.m. to 10:39 a.m.",
+    "10:40 a.m. to 10:44 a.m.",
+    "10:45 a.m. to 10:49 a.m.",
+    "10:50 a.m. to 10:54 a.m.",
+    "10:55 a.m. to 10:59 a.m.",
+    "11:00 a.m. to 11:04 a.m.",
+    "11:05 a.m. to 11:09 a.m.",
+    "11:10 a.m. to 11:14 a.m.",
+    "11:15 a.m. to 11:19 a.m.",
+    "11:20 a.m. to 11:24 a.m.",
+    "11:25 a.m. to 11:29 a.m.",
+    "11:30 a.m. to 11:34 a.m.",
+    "11:35 a.m. to 11:39 a.m.",
+    "11:40 a.m. to 11:44 a.m.",
+    "11:45 a.m. to 11:49 a.m.",
+    "11:50 a.m. to 11:54 a.m.",
+    "11:55 a.m. to 11:59 a.m.",
+    "12:00 p.m. to 12:04 p.m.",
+    "12:05 p.m. to 12:09 p.m.",
+    "12:10 p.m. to 12:14 p.m.",
+    "12:15 p.m. to 12:19 p.m.",
+    "12:20 p.m. to 12:24 p.m.",
+    "12:25 p.m. to 12:29 p.m.",
+    "12:30 p.m. to 12:34 p.m.",
+    "12:35 p.m. to 12:39 p.m.",
+    "12:40 p.m. to 12:44 p.m.",
+    "12:45 p.m. to 12:49 p.m.",
+    "12:50 p.m. to 12:54 p.m.",
+    "12:55 p.m. to 12:59 p.m.",
+    "1:00 p.m. to 1:04 p.m.",
+    "1:05 p.m. to 1:09 p.m.",
+    "1:10 p.m. to 1:14 p.m.",
+    "1:15 p.m. to 1:19 p.m.",
+    "1:20 p.m. to 1:24 p.m.",
+    "1:25 p.m. to 1:29 p.m.",
+    "1:30 p.m. to 1:34 p.m.",
+    "1:35 p.m. to 1:39 p.m.",
+    "1:40 p.m. to 1:44 p.m.",
+    "1:45 p.m. to 1:49 p.m.",
+    "1:50 p.m. to 1:54 p.m.",
+    "1:55 p.m. to 1:59 p.m.",
+    "2:00 p.m. to 2:04 p.m.",
+    "2:05 p.m. to 2:09 p.m.",
+    "2:10 p.m. to 2:14 p.m.",
+    "2:15 p.m. to 2:19 p.m.",
+    "2:20 p.m. to 2:24 p.m.",
+    "2:25 p.m. to 2:29 p.m.",
+    "2:30 p.m. to 2:34 p.m.",
+    "2:35 p.m. to 2:39 p.m.",
+    "2:40 p.m. to 2:44 p.m.",
+    "2:45 p.m. to 2:49 p.m.",
+    "2:50 p.m. to 2:54 p.m.",
+    "2:55 p.m. to 2:59 p.m.",
+    "3:00 p.m. to 3:04 p.m.",
+    "3:05 p.m. to 3:09 p.m.",
+    "3:10 p.m. to 3:14 p.m.",
+    "3:15 p.m. to 3:19 p.m.",
+    "3:20 p.m. to 3:24 p.m.",
+    "3:25 p.m. to 3:29 p.m.",
+    "3:30 p.m. to 3:34 p.m.",
+    "3:35 p.m. to 3:39 p.m.",
+    "3:40 p.m. to 3:44 p.m.",
+    "3:45 p.m. to 3:49 p.m.",
+    "3:50 p.m. to 3:54 p.m.",
+    "3:55 p.m. to 3:59 p.m.",
+    "4:00 p.m. to 4:04 p.m.",
+    "4:05 p.m. to 4:09 p.m.",
+    "4:10 p.m. to 4:14 p.m.",
+    "4:15 p.m. to 4:19 p.m.",
+    "4:20 p.m. to 4:24 p.m.",
+    "4:25 p.m. to 4:29 p.m.",
+    "4:30 p.m. to 4:34 p.m.",
+    "4:35 p.m. to 4:39 p.m.",
+    "4:40 p.m. to 4:44 p.m.",
+    "4:45 p.m. to 4:49 p.m.",
+    "4:50 p.m. to 4:54 p.m.",
+    "4:55 p.m. to 4:59 p.m.",
+    "5:00 p.m. to 5:04 p.m.",
+    "5:05 p.m. to 5:09 p.m.",
+    "5:10 p.m. to 5:14 p.m.",
+    "5:15 p.m. to 5:19 p.m.",
+    "5:20 p.m. to 5:24 p.m.",
+    "5:25 p.m. to 5:29 p.m.",
+    "5:30 p.m. to 5:34 p.m.",
+    "5:35 p.m. to 5:39 p.m.",
+    "5:40 p.m. to 5:44 p.m.",
+    "5:45 p.m. to 5:49 p.m.",
+    "5:50 p.m. to 5:54 p.m.",
+    "5:55 p.m. to 5:59 p.m.",
+    "6:00 p.m. to 6:04 p.m.",
+    "6:05 p.m. to 6:09 p.m.",
+    "6:10 p.m. to 6:14 p.m.",
+    "6:15 p.m. to 6:19 p.m.",
+    "6:20 p.m. to 6:24 p.m.",
+    "6:25 p.m. to 6:29 p.m.",
+    "6:30 p.m. to 6:34 p.m.",
+    "6:35 p.m. to 6:39 p.m.",
+    "6:40 p.m. to 6:44 p.m.",
+    "6:45 p.m. to 6:49 p.m.",
+    "6:50 p.m. to 6:54 p.m.",
+    "6:55 p.m. to 6:59 p.m.",
+    "7:00 p.m. to 7:04 p.m.",
+    "7:05 p.m. to 7:09 p.m.",
+    "7:10 p.m. to 7:14 p.m.",
+    "7:15 p.m. to 7:19 p.m.",
+    "7:20 p.m. to 7:24 p.m.",
+    "7:25 p.m. to 7:29 p.m.",
+    "7:30 p.m. to 7:34 p.m.",
+    "7:35 p.m. to 7:39 p.m.",
+    "7:40 p.m. to 7:44 p.m.",
+    "7:45 p.m. to 7:49 p.m.",
+    "7:50 p.m. to 7:54 p.m.",
+    "7:55 p.m. to 7:59 p.m.",
+    "8:00 p.m. to 8:04 p.m.",
+    "8:05 p.m. to 8:09 p.m.",
+    "8:10 p.m. to 8:14 p.m.",
+    "8:15 p.m. to 8:19 p.m.",
+    "8:20 p.m. to 8:24 p.m.",
+    "8:25 p.m. to 8:29 p.m.",
+    "8:30 p.m. to 8:34 p.m.",
+    "8:35 p.m. to 8:39 p.m.",
+    "8:40 p.m. to 8:44 p.m.",
+    "8:45 p.m. to 8:49 p.m.",
+    "8:50 p.m. to 8:54 p.m.",
+    "8:55 p.m. to 8:59 p.m.",
+    "9:00 p.m. to 9:04 p.m.",
+    "9:05 p.m. to 9:09 p.m.",
+    "9:10 p.m. to 9:14 p.m.",
+    "9:15 p.m. to 9:19 p.m.",
+    "9:20 p.m. to 9:24 p.m.",
+    "9:25 p.m. to 9:29 p.m.",
+    "9:30 p.m. to 9:34 p.m.",
+    "9:35 p.m. to 9:39 p.m.",
+    "9:40 p.m. to 9:44 p.m.",
+    "9:45 p.m. to 9:49 p.m.",
+    "9:50 p.m. to 9:54 p.m.",
+    "9:55 p.m. to 9:59 p.m.",
+    "10:00 p.m. to 10:04 p.m.",
+    "10:05 p.m. to 10:09 p.m.",
+    "10:10 p.m. to 10:14 p.m.",
+    "10:15 p.m. to 10:19 p.m.",
+    "10:20 p.m. to 10:24 p.m.",
+    "10:25 p.m. to 10:29 p.m.",
+    "10:30 p.m. to 10:34 p.m.",
+    "10:35 p.m. to 10:39 p.m.",
+    "10:40 p.m. to 10:44 p.m.",
+    "10:45 p.m. to 10:49 p.m.",
+    "10:50 p.m. to 10:54 p.m.",
+    "10:55 p.m. to 10:59 p.m.",
+    "11:00 p.m. to 11:04 p.m.",
+    "11:05 p.m. to 11:09 p.m.",
+    "11:10 p.m. to 11:14 p.m.",
+    "11:15 p.m. to 11:19 p.m.",
+    "11:20 p.m. to 11:24 p.m.",
+    "11:25 p.m. to 11:29 p.m.",
+    "11:30 p.m. to 11:34 p.m.",
+    "11:35 p.m. to 11:39 p.m.",
+    "11:40 p.m. to 11:44 p.m.",
+    "11:45 p.m. to 11:49 p.m.",
+    "11:50 p.m. to 11:54 p.m.",
+    "11:55 p.m. to 11:59 p.m.",
+    "N/A (not a worker; worker who worked from home)"
+)
+names(jwap_time_lookup) <- sprintf("%03d", c(1:285, 0))
+head(jwap_time_lookup)
+```
+```{r}
+jwdp_time_lookup <- c(
+
+  "12:00 a.m. to 12:29 a.m.",
+  "12:30 a.m. to 12:59 a.m.",
+  "1:00 a.m. to 1:29 a.m.",
+  "1:30 a.m. to 1:59 a.m.",
+  "2:00 a.m. to 2:29 a.m.",
+  "2:30 a.m. to 2:59 a.m.",
+  "3:00 a.m. to 3:09 a.m.",
+  "3:10 a.m. to 3:19 a.m.",
+  "3:20 a.m. to 3:29 a.m.",
+  "3:30 a.m. to 3:39 a.m.",
+  "3:40 a.m. to 3:49 a.m.",
+  "3:50 a.m. to 3:59 a.m.",
+  "4:00 a.m. to 4:09 a.m.",
+  "4:10 a.m. to 4:19 a.m.",
+  "4:20 a.m. to 4:29 a.m.",
+  "4:30 a.m. to 4:39 a.m.",
+  "4:40 a.m. to 4:49 a.m.",
+  "4:50 a.m. to 4:59 a.m.",
+  "5:00 a.m. to 5:04 a.m.",
+  "5:05 a.m. to 5:09 a.m.",
+  "5:10 a.m. to 5:14 a.m.",
+  "5:15 a.m. to 5:19 a.m.",
+  "5:20 a.m. to 5:24 a.m.",
+  "5:25 a.m. to 5:29 a.m.",
+  "5:30 a.m. to 5:34 a.m.",
+  "5:35 a.m. to 5:39 a.m.",
+  "5:40 a.m. to 5:44 a.m.",
+  "5:45 a.m. to 5:49 a.m.",
+  "5:50 a.m. to 5:54 a.m.",
+  "5:55 a.m. to 5:59 a.m.",
+  "6:00 a.m. to 6:04 a.m.",
+  "6:05 a.m. to 6:09 a.m.",
+  "6:10 a.m. to 6:14 a.m.",
+  "6:15 a.m. to 6:19 a.m.",
+  "6:20 a.m. to 6:24 a.m.",
+  "6:25 a.m. to 6:29 a.m.",
+  "6:30 a.m. to 6:34 a.m.",
+  "6:35 a.m. to 6:39 a.m.",
+  "6:40 a.m. to 6:44 a.m.",
+  "6:45 a.m. to 6:49 a.m.",
+  "6:50 a.m. to 6:54 a.m.",
+  "6:55 a.m. to 6:59 a.m.",
+  "7:00 a.m. to 7:04 a.m.",
+  "7:05 a.m. to 7:09 a.m.",
+  "7:10 a.m. to 7:14 a.m.",
+  "7:15 a.m. to 7:19 a.m.",
+  "7:20 a.m. to 7:24 a.m.",
+  "7:25 a.m. to 7:29 a.m.",
+  "7:30 a.m. to 7:34 a.m.",
+  "7:35 a.m. to 7:39 a.m.",
+  "7:40 a.m. to 7:44 a.m.",
+  "7:45 a.m. to 7:49 a.m.",
+  "7:50 a.m. to 7:54 a.m.",
+  "7:55 a.m. to 7:59 a.m.",
+  "8:00 a.m. to 8:04 a.m.",
+  "8:05 a.m. to 8:09 a.m.",
+  "8:10 a.m. to 8:14 a.m.",
+  "8:15 a.m. to 8:19 a.m.",
+  "8:20 a.m. to 8:24 a.m.",
+  "8:25 a.m. to 8:29 a.m.",
+  "8:30 a.m. to 8:34 a.m.",
+  "8:35 a.m. to 8:39 a.m.",
+  "8:40 a.m. to 8:44 a.m.",
+  "8:45 a.m. to 8:49 a.m.",
+  "8:50 a.m. to 8:54 a.m.",
+  "8:55 a.m. to 8:59 a.m.",
+  "9:00 a.m. to 9:04 a.m.",
+  "9:05 a.m. to 9:09 a.m.",
+  "9:10 a.m. to 9:14 a.m.",
+  "9:15 a.m. to 9:19 a.m.",
+  "9:20 a.m. to 9:24 a.m.",
+  "9:25 a.m. to 9:29 a.m.",
+  "9:30 a.m. to 9:34 a.m.",
+  "9:35 a.m. to 9:39 a.m.",
+  "9:40 a.m. to 9:44 a.m.",
+  "9:45 a.m. to 9:49 a.m.",
+  "9:50 a.m. to 9:54 a.m.",
+  "9:55 a.m. to 9:59 a.m.",
+  "10:00 a.m. to 10:09 a.m.",
+  "10:10 a.m. to 10:19 a.m.",
+  "10:20 a.m. to 10:29 a.m.",
+  "10:30 a.m. to 10:39 a.m.",
+  "10:40 a.m. to 10:49 a.m.",
+  "10:50 a.m. to 10:59 a.m.",
+  "11:00 a.m. to 11:09 a.m.",
+  "11:10 a.m. to 11:19 a.m.",
+  "11:20 a.m. to 11:29 a.m.",
+  "11:30 a.m. to 11:39 a.m.",
+  "11:40 a.m. to 11:49 a.m.",
+  "11:50 a.m. to 11:59 a.m.",
+  "12:00 p.m. to 12:09 p.m.",
+  "12:10 p.m. to 12:19 p.m.",
+  "12:20 p.m. to 12:29 p.m.",
+  "12:30 p.m. to 12:39 p.m.",
+  "12:40 p.m. to 12:49 p.m.",
+  "12:50 p.m. to 12:59 p.m.",
+  "1:00 p.m. to 1:09 p.m.",
+  "1:10 p.m. to 1:19 p.m.",
+  "1:20 p.m. to 1:29 p.m.",
+  "1:30 p.m. to 1:39 p.m.",
+  "1:40 p.m. to 1:49 p.m.",
+  "1:50 p.m. to 1:59 p.m.",
+  "2:00 p.m. to 2:09 p.m.",
+  "2:10 p.m. to 2:19 p.m.",
+  "2:20 p.m. to 2:29 p.m.",
+  "2:30 p.m. to 2:39 p.m.",
+  "2:40 p.m. to 2:49 p.m.",
+  "2:50 p.m. to 2:59 p.m.",
+  "3:00 p.m. to 3:09 p.m.",
+  "3:10 p.m. to 3:19 p.m.",
+  "3:20 p.m. to 3:29 p.m.",
+  "3:30 p.m. to 3:39 p.m.",
+  "3:40 p.m. to 3:49 p.m.",
+  "3:50 p.m. to 3:59 p.m.",
+  "4:00 p.m. to 4:09 p.m.",
+  "4:10 p.m. to 4:19 p.m.",
+  "4:20 p.m. to 4:29 p.m.",
+  "4:30 p.m. to 4:39 p.m.",
+  "4:40 p.m. to 4:49 p.m.",
+  "4:50 p.m. to 4:59 p.m.",
+  "5:00 p.m. to 5:09 p.m.",
+  "5:10 p.m. to 5:19 p.m.",
+  "5:20 p.m. to 5:29 p.m.",
+  "5:30 p.m. to 5:39 p.m.",
+  "5:40 p.m. to 5:49 p.m.",
+  "5:50 p.m. to 5:59 p.m.",
+  "6:00 p.m. to 6:09 p.m.",
+  "6:10 p.m. to 6:19 p.m.",
+  "6:20 p.m. to 6:29 p.m.",
+  "6:30 p.m. to 6:39 p.m.",
+  "6:40 p.m. to 6:49 p.m.",
+  "6:50 p.m. to 6:59 p.m.",
+  "7:00 p.m. to 7:29 p.m.",
+  "7:30 p.m. to 7:59 p.m.",
+  "8:00 p.m. to 8:29 p.m.",
+  "8:30 p.m. to 8:59 p.m.",
+  "9:00 p.m. to 9:09 p.m.",
+  "9:10 p.m. to 9:19 p.m.",
+  "9:20 p.m. to 9:29 p.m.",
+  "9:30 p.m. to 9:39 p.m.",
+  "9:40 p.m. to 9:49 p.m.",
+  "9:50 p.m. to 9:59 p.m.",
+  "10:00 p.m. to 10:09 p.m.",
+  "10:10 p.m. to 10:19 p.m.",
+  "10:20 p.m. to 10:29 p.m.",
+  "10:30 p.m. to 10:39 p.m.",
+  "10:40 p.m. to 10:49 p.m.",
+  "10:50 p.m. to 10:59 p.m.",
+  "11:00 p.m. to 11:29 p.m.",
+  "11:30 p.m. to 11:59 p.m.",
+  "N/A (not a worker; worked from home)"
+)
+
+names(jwdp_time_lookup) <- sprintf("%03d", c(1:150, 0))
+head(jwdp_time_lookup)
 ```
 
