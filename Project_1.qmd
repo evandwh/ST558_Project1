@@ -794,3 +794,21 @@ getS3method("plot","data.frame") #what is used for a class = data frame
 plot
 ```
 
+
+```{r}
+summary.census <- function(data, num_vars = NULL, cat_vars = NULL) {
+  if (is.Null(num_vars)) {
+    num_vars <- data |> 
+      select(where(is.numeric)) |> 
+      names()
+    num_vars <- setdiff(numeric_cols, "PWGTP")
+  }
+  if (is.Null(cat_vars)) {
+    cat_vars <- data |>
+      select(where(is.factor)) |>
+      names()
+  }
+  
+}
+```
+
