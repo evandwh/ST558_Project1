@@ -14,6 +14,8 @@ library(curl)
 library(dplyr)
 library(stringr)
 library(lubridate)
+library(hms)
+
 
 key <- "70c77fa9cc244f5a9fb3c46ed731835d132c0670"
 ```
@@ -29,156 +31,6 @@ data <- as_tibble(parsed[-1, ])
 colnames(data) <- parsed[1, ]
 
 str(data)
-```
-
-
-```{r}
-help_help <- function(raw_data) {
-  parsed <- fromJSON(rawToChar(raw_data$content))
-  data <- as_tibble(parsed[-1, ])
-  colnames(data) <- parsed[1, ]
-  data
-}
-```
-
-
-```{r}
-help_help_codes <- function(geo, geo_name) {
-  state_fips <- c(
-    AL = "01", AK = "02", AZ = "04", AR = "05", CA = "06",
-    CO = "08", CT = "09", DE = "10", DC = "11", FL = "12",
-    GA = "13", HI = "15", ID = "16", IL = "17", IN = "18",
-    IA = "19", KS = "20", KY = "21", LA = "22", ME = "23",
-    MD = "24", MA = "25", MI = "26", MN = "27", MS = "28",
-    MO = "29", MT = "30", NE = "31", NV = "32", NH = "33",
-    NJ = "34", NM = "35", NY = "36", NC = "37", ND = "38",
-    OH = "39", OK = "40", OR = "41", PA = "42", RI = "44",
-    SC = "45", SD = "46", TN = "47", TX = "48", UT = "49",
-    VT = "50", VA = "51", WA = "53", WV = "54", WI = "55",
-    WY = "56"
-  )
-  region_codes <- c(
-    Northeast = "1",
-    Midwest   = "2",
-    South     = "3",
-    West      = "4"
-  )
-  division_codes <- c(
-    New_England        = "1",
-    Middle_Atlantic    = "2",
-    East_North_Central = "3",
-    West_North_Central = "4",
-    South_Atlantic     = "5",
-    East_South_Central = "6",
-    West_South_Central = "7",
-    Mountain           = "8",
-    Pacific            = "9"
-  )
-  if (geo == "STATE") {
-    if ((geo_name %in% names(state_fips))) {
-      code <- state_fips[[geo_name]]
-    } else if (geo_name %in% state_fips) {
-      code <- geo_name
-    } else {
-      stop("State code not found")
-    }
-  } else if (geo == "REGION") {
-    if (geo_name %in% names(region_codes)) {
-      code <- region_codes[[geo_name]]
-    } else if (geo_name %in% region_codes) {
-      code <- geo_name
-    } else {
-      stop("Region code not found")
-    }
-  } else if (geo == "DIVISION") {
-    if (geo_name %in% names(division_codes)) {
-      code <- division_codes[[geo_name]]
-    } else if (geo_name %in% division_codes) {
-      code <- geo_name
-    } else {
-      stop("Division code not found")
-    }
-  } else {
-    stop("Invalid input. Incorrect geograph type.")
-  }
-  code
-}
-
-help_help_codes("STATE", "NC")
-help_help_codes("REGION", "NC")
-```
-Now, these should not be character columns. We will fix that later if/when needed once we get our function running! Let's build that function.
-
-```{r}
-helper_fun <- function(year = 2022, 
-                       num_vars = c("AGEP", "PWGTP"),  #AGEP and PWGTP by default
-                       cat_vars = c("SEX"), #SEX by default
-                       geo = "STATE",       #State by default
-                       geo_name = "NC",
-                       key = "70c77fa9cc244f5a9fb3c46ed731835d132c0670") {   #North Carolina by default
-  num_vars <- toupper(num_vars)
-  cat_vars <- toupper(cat_vars)
-  geo <- toupper(geo)
-  if (year > 2022 || year < 2010) {
-    stop("Year must be between 2010 and 2022, inclusive.")
-  }
-  if (!("PWGTP" %in% num_vars)) {
-    num_vars <- c(num_vars, "PWGTP")  #Always want PWGTP
-  }
-  if (length(num_vars) <= 1) {
-    stop("Please provide more than one numerical variable.")
-  }
-  for (k in num_vars) {
-    if (!(k %in% c("AGEP", "GASP", "GRPIP", "JWAP", "JWDP", "JWMNP", "PWGTP"))) {
-      stop("Please choose only valid options for num_vars.")
-    }
-  }
-  for (k in cat_vars) {
-    if (!(k %in% c("FER", "HHL", "SCH", "SCHL", "SEX"))) {
-      stop("Please choose only valid options for cat_vars.")
-    }
-  }
-  if (length(cat_vars) == 0) {  #Must have at least one categorical variable.
-    stop("Must have at least one categorical variable.")
-  }
-  if (!(is.null(geo))) {
-    if (!(toupper(geo) %in% c("REGION", "DIVISION", "STATE"))) {
-      stop("Incorrect Geography provided")
-    }
-    geo_string <- paste0("&for=",geo)
-  } else {
-    geo_string <- ""
-  }
-  if ((geo_string == "") && (!(is.null(geo_name)))) {
-    stop("Cannot give a location without a specificed geography type")
-  }
-  if (geo_name == "ALL") {
-    code <- "*"
-  }
-  else {
-    code <- help_help_codes(geo, geo_name)
-  }
-  geo_string <- paste0(geo_string,":",code)
-  num_string <- paste(num_vars, collapse = ",")
-  cat_string <- paste(cat_vars, collapse = ",")
-  url <- paste0("https://api.census.gov/data/",
-                year,
-                "/acs/acs1/pums?get=",
-                cat_string,
-                ",", #cat_var and num_var always have at least one element
-                num_string,
-                geo_string,
-                "&key=",
-                key)
-  print(url)
-  results <- GET(url)
-}
-
-helper_fun(2021, geo = "Region", geo_name = "South")
-```
-
-```{r}
-help_help(helper_fun(2021, num_vars = c("JWAP", "JWDP")))
 ```
 
 ```{r}
@@ -470,9 +322,13 @@ jwap_time_lookup <- c(
     "11:55 p.m. to 11:59 p.m.",
     "N/A (not a worker; worker who worked from home)"
 )
-names(jwap_time_lookup) <- sprintf("%03d", c(1:285, 0))
+
+jwap_time_lookup <- sapply(jwap_time_lookup, interval_midpoint)
+
+names(jwap_time_lookup) <- c(1:285, 0)
 head(jwap_time_lookup)
 ```
+
 ```{r}
 jwdp_time_lookup <- c(
 
@@ -629,7 +485,8 @@ jwdp_time_lookup <- c(
   "N/A (not a worker; worked from home)"
 )
 
-names(jwdp_time_lookup) <- sprintf("%03d", c(1:150, 0))
+jwdp_time_lookup <- sapply(jwdp_time_lookup, interval_midpoint)
+names(jwdp_time_lookup) <-c(1:150, 0)
 head(jwdp_time_lookup)
 ```
 
@@ -649,14 +506,281 @@ interval_midpoint <- function(time_string) {
   
   start_time <- parse_date_time(start, orders = "I:M p")
   end_time <- parse_date_time(end, orders = "I:M p")
-  
-  start_just_time <- format(start_time, "%H:%M:%S")
-  end_just_time <- format(end_time, "%H:%M:%S")
 
-  midpoint <- (start_just_time + end_just_time) / 2
+  midpoint <- midpoint <- start_time + (end_time - start_time) / 2
   midpoint
 }
 
 interval_midpoint("10:20 p.m. to 10:24 p.m.")
+```
+
+```{r}
+census_rawdata_to_tibble <- function(raw_data) {
+  numeric_cols <- c("AGEP", "GASP", "GRPIP", "JWMNP", "PWGTP")
+  parsed <- fromJSON(rawToChar(raw_data$content))
+  data <- as_tibble(parsed[-1, ])
+  colnames(data) <- parsed[1, ]
+  if ("JWAP" %in% colnames(data)) {
+    data <- data |> 
+      mutate(
+        JWAP = jwap_time_lookup[JWAP]
+      )
+  }
+  if ("JWDP" %in% colnames(data)) {
+    data <- data |> 
+      mutate(
+        JWDP = jwdp_time_lookup[JWDP]
+      )
+  }
+  data <- data |>
+    mutate(across(any_of(numeric_cols), as.numeric)) |>
+    mutate(
+      JWAP = na_if(as.character(JWAP), "0"),
+      JWDP = na_if(as.character(JWDP), "0"),
+      JWAP = parse_hm(JWAP),
+      JWDP = parse_hm(JWDP)
+    )
+  if ("SEX" %in% colnames(data)) {
+      data$SEX = factor(data$SEX, 
+                        levels = c(1, 2),
+                        labels = c("Male", "Female"))
+        }
+  if ("FER" %in% colnames(data)) {
+      data$FER = factor(data$FER, 
+                        levels = c(0, 1, 2),
+                        labels = c("N/A (less than 15 years/greater than 50 years/ male)",
+                                   "Yes",
+                                   "No"))  
+      }
+  if ("HHL" %in% colnames(data)) {
+      data$HHL = factor(data$HHL, 
+                           levels = c(0, 1, 2, 3, 4, 5),
+                           labels = c("N/A (GQ/vacant)",
+                                      "English Only",
+                                      "Spanish",
+                                      "Other Indo-European languages",
+                                      "Asian and Pacific Island languages",
+                                      "Other Language"))
+        }
+  if ("SCL" %in% colnames(data)) {      
+      data$SCL = factor(data$SCL, 
+                           levels = c(0,1,2,3),
+                           labels = c("N/A (less than 3 years old)",
+                                      "No, has not attended in the last 3 months",
+                                      "Yes, public school or public college",
+                                      "Yes, private school or college or home school"))
+        }
+  if ("SCHL" %in% colnames(data)) {
+      data$SCHL = factor(data$SCHL, 
+                            levels = c(0:24),
+                            labels = c("N/A (less than 3 years old)",
+                                       "No schooling completed",
+                                       "Nursery school, preschool",
+                                       "Kindergarten",
+                                       "Grade 1",
+                                       "Grade 2",
+                                       "Grade 3",
+                                       "Grade 4",
+                                       "Grade 5",
+                                       "Grade 6",
+                                       "Grade 7",
+                                       "Grade 8",
+                                       "Grade 9",
+                                       "Grade 10",
+                                       "Grade 11",
+                                       "12th grade - no diploma",
+                                       "Regular high school diploma",
+                                       "GED or alternative credential",
+                                       "Some college, but less than 1 year",
+                                       "1 or more years of college credit, no degree",
+                                       "Associate's degree",
+                                       "Bachelor's degree",
+                                       "Master's degree",
+                                       "Professional degree beyond a bachelor's degree",
+                                       "Doctorate degree")
+                       )
+  }
+  data
+}
+```
+
+
+```{r}
+help_codes <- function(geo, geo_name) {
+  state_fips <- c(
+    AL = "01", AK = "02", AZ = "04", AR = "05", CA = "06",
+    CO = "08", CT = "09", DE = "10", DC = "11", FL = "12",
+    GA = "13", HI = "15", ID = "16", IL = "17", IN = "18",
+    IA = "19", KS = "20", KY = "21", LA = "22", ME = "23",
+    MD = "24", MA = "25", MI = "26", MN = "27", MS = "28",
+    MO = "29", MT = "30", NE = "31", NV = "32", NH = "33",
+    NJ = "34", NM = "35", NY = "36", NC = "37", ND = "38",
+    OH = "39", OK = "40", OR = "41", PA = "42", RI = "44",
+    SC = "45", SD = "46", TN = "47", TX = "48", UT = "49",
+    VT = "50", VA = "51", WA = "53", WV = "54", WI = "55",
+    WY = "56"
+  )
+  region_codes <- c(
+    Northeast = "1",
+    Midwest   = "2",
+    South     = "3",
+    West      = "4"
+  )
+  division_codes <- c(
+    New_England        = "1",
+    Middle_Atlantic    = "2",
+    East_North_Central = "3",
+    West_North_Central = "4",
+    South_Atlantic     = "5",
+    East_South_Central = "6",
+    West_South_Central = "7",
+    Mountain           = "8",
+    Pacific            = "9"
+  )
+  if (geo == "STATE") {
+    if ((geo_name %in% names(state_fips))) {
+      code <- state_fips[[geo_name]]
+    } else if (geo_name %in% state_fips) {
+      code <- geo_name
+    } else {
+      stop("State code not found")
+    }
+  } else if (geo == "REGION") {
+    if (geo_name %in% names(region_codes)) {
+      code <- region_codes[[geo_name]]
+    } else if (geo_name %in% region_codes) {
+      code <- geo_name
+    } else {
+      stop("Region code not found")
+    }
+  } else if (geo == "DIVISION") {
+    if (geo_name %in% names(division_codes)) {
+      code <- division_codes[[geo_name]]
+    } else if (geo_name %in% division_codes) {
+      code <- geo_name
+    } else {
+      stop("Division code not found")
+    }
+  } else {
+    stop("Invalid input. Incorrect geograph type.")
+  }
+  code
+}
+
+help_help_codes("STATE", "NC")
+
+help_help_codes("REGION", "NC") #Should fail!
+```
+Now, these should not be character columns. We will fix that later if/when needed once we get our function running! Let's build that function.
+
+```{r}
+single_year_rawdata <- function(year = 2022, 
+                       num_vars = c("AGEP", "PWGTP"),  #AGEP and PWGTP by default
+                       cat_vars = c("SEX"), #SEX by default
+                       geo = "STATE",       #State by default
+                       geo_name = "NC",
+                       key = "70c77fa9cc244f5a9fb3c46ed731835d132c0670") {   #North Carolina by default
+  num_vars <- toupper(num_vars)
+  cat_vars <- toupper(cat_vars)
+  geo <- toupper(geo)
+  if (year > 2022 || year < 2010) {
+    stop("Year must be between 2010 and 2022, inclusive.")
+  }
+  if (!("PWGTP" %in% num_vars)) {
+    num_vars <- c(num_vars, "PWGTP")  #Always want PWGTP
+  }
+  if (length(num_vars) <= 1) {
+    stop("Please provide more than one numerical variable.")
+  }
+  for (k in num_vars) {
+    if (!(k %in% c("AGEP", "GASP", "GRPIP", "JWAP", "JWDP", "JWMNP", "PWGTP"))) {
+      stop("Please choose only valid options for num_vars.")
+    }
+  }
+  for (k in cat_vars) {
+    if (!(k %in% c("FER", "HHL", "SCH", "SCHL", "SEX"))) {
+      stop("Please choose only valid options for cat_vars.")
+    }
+  }
+  if (length(cat_vars) == 0) {  #Must have at least one categorical variable.
+    stop("Must have at least one categorical variable.")
+  }
+  if (!(is.null(geo))) {
+    if (!(toupper(geo) %in% c("REGION", "DIVISION", "STATE"))) {
+      stop("Incorrect Geography provided")
+    }
+    geo_string <- paste0("&for=",geo)
+  } else {
+    geo_string <- ""
+  }
+  if ((geo_string == "") && (!(is.null(geo_name)))) {
+    stop("Cannot give a location without a specificed geography type")
+  }
+  if (geo_name == "ALL") {
+    code <- "*"
+  }
+  else {
+    code <- help_help_codes(geo, geo_name)
+  }
+  geo_string <- paste0(geo_string,":",code)
+  num_string <- paste(num_vars, collapse = ",")
+  cat_string <- paste(cat_vars, collapse = ",")
+  url <- paste0("https://api.census.gov/data/",
+                year,
+                "/acs/acs1/pums?get=",
+                cat_string,
+                ",", #cat_var and num_var always have at least one element
+                num_string,
+                geo_string,
+                "&key=",
+                key)
+  print(url)
+  results <- GET(url)
+}
+```
+
+```{r}
+trial_dat <- single_year_rawdata(2019, num_vars = c("JWAP", "JWDP"), cat_vars = c("SEX", "SCHL"))
+trial_data <- census_rawdata_to_tibble(trial_dat)
+
+str(trial_data)
+head(trial_data, 50)
+```
+
+
+```{r}
+multiple_years_data <- function(years,
+                                num_vars = c("AGEP", "PWGTP"),  #AGEP and PWGTP by default
+                                cat_vars = c("SEX"), #SEX by default
+                                geo = "STATE",       #State by default
+                                geo_name = "NC",
+                                key = "70c77fa9cc244f5a9fb3c46ed731835d132c0670") {
+  df <- NULL
+  years <- years[years != 2020]
+  for (year in years) {
+    year_data <- census_rawdata_to_tibble(
+                    single_year_rawdata(year,
+                                        num_vars,
+                                        cat_vars,
+                                        geo,
+                                        geo_name,
+                                        key)
+    )
+    year_data$year = year
+    if (!(exists("df"))) {
+      df <-  year_data
+    } else {
+      df <-  bind_rows(df, year_data)
+    }
+  }
+  df
+}
+```
+
+
+```{r}
+trial_dat <- multiple_years_data(years = c(2020, 2021), num_vars = c("JWAP", "JWDP"), cat_vars = c("SEX", "SCHL"))
+
+head(trial_dat, 10)
 ```
 
