@@ -600,6 +600,7 @@ census_rawdata_to_tibble <- function(raw_data) {
                                        "Doctorate degree")
                        )
   }
+  class(data) <- c("census", class(data))
   data
 }
 ```
@@ -782,5 +783,14 @@ multiple_years_data <- function(years,
 trial_dat <- multiple_years_data(years = c(2020, 2021), num_vars = c("JWAP", "JWDP"), cat_vars = c("SEX", "SCHL"))
 
 head(trial_dat, 10)
+class(trial_dat)
+```
+
+
+```{r}
+#Run these in your console
+plot.function #what is used for a class = function
+getS3method("plot","data.frame") #what is used for a class = data frame
+plot
 ```
 
