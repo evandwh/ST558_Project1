@@ -4,7 +4,13 @@ format: html
 author: "Evan Whitfield"
 ---
 
-Just getting started.
+## Intro
+This project creates a function for an API call to get US Census data from the correct URL. The function builds the URL, gets the data from the URL, then stores the data in a tibble.
+
+We then create a way to summarize and plot our census data after creating the class `census`. The plotting is a boxplot.
+
+### Load in necessary libraries.
+There are several libraries that are needed throughout this project. They are all loaded here. Some may have been removed from the file product below.
 
 ```{r}
 #| warning: False
@@ -18,14 +24,13 @@ library(hms)
 library(tidyr)
 library(ggplot2)
 library(quantreg)
-
-
-key <- "70c77fa9cc244f5a9fb3c46ed731835d132c0670"
 ```
 
-Let's do a quick test!
+Let's do a quick test of our key and practice getting our data into a tibble
 ```{r}
 #| warning: False
+
+key <- "70c77fa9cc244f5a9fb3c46ed731835d132c0670"
 url <- paste0("https://api.census.gov/data/2022/acs/acs1/pums?get=SEX,PWGTP,MAR&SCHL=24&key=", key)
 
 response <- GET(url, timeout(120))
@@ -40,7 +45,7 @@ str(data)
 ```{r}
 interval_midpoint <- function(time_string) {
   
-  if (time_string == "0") {
+  if (is.na(time_string) || time_string == "0") {
     return(hms::as_hms(NA))
   }
 
