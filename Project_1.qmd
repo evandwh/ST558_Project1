@@ -5,11 +5,13 @@ author: "Evan Whitfield"
 ---
 
 ## Intro
+
 This project creates a function for an API call to get US Census data from the correct URL. The function builds the URL, gets the data from the URL, then stores the data in a tibble.
 
 We then create a way to summarize and plot our census data after creating the class `census`. The plotting is a boxplot.
 
 ### Load in necessary libraries.
+
 There are several libraries that are needed throughout this project. They are all loaded here. Some may have been removed from the file product below.
 
 ```{r}
@@ -26,10 +28,9 @@ library(ggplot2)
 library(quantreg)
 ```
 
-Let's do a quick test of our key and practice getting our data into a tibble
-```{r}
-#| warning: False
+Let's do a quick test of our key and practice getting our data into a tibble.
 
+```{r}
 key <- "70c77fa9cc244f5a9fb3c46ed731835d132c0670"
 url <- paste0("https://api.census.gov/data/2022/acs/acs1/pums?get=SEX,PWGTP,MAR&SCHL=24&key=", key)
 
@@ -41,12 +42,19 @@ colnames(data) <- parsed[1, ]
 str(data)
 ```
 
+From our URL, we can see the four variables `SEX`, `PWGTP`, `MAR` and `SCHL` were selected from the US Census Data. All four variables were returned as `chr` even though there are currently numbers. As we create our function to build the URL and turn it into a tibble for us, we will look at the different factors for each categorical variable. That way we will know if 2 corresponds to the person being a male or a female.
+
+## Functions (And Other Important Things!)
+
+### Time Variables and Functions
+
+The variables `JWAP` and `JWDP` are associated with times. Therefore, the first function we are going to need is a function that takes a string with a time interval in it and returns the midpoint of the time interval. I wanted to have all of the values eventually returned to as a time. It might make more sense have this returned as seconds since midnight, if we were trying to do some kind of summary on the variable. However, we have chosen not to summarize our time variables, and I enjoy seeing the actual time instead of need to do a computation to figure it out from a value of seconds.
 
 ```{r}
 interval_midpoint <- function(time_string) {
   
   if (is.na(time_string) || time_string == "0") {
-    return(hms::as_hms(NA))
+    return(as_hms(NA))
   }
 
   pieces <- str_split(time_string, " to ", simplify = TRUE)
@@ -64,14 +72,20 @@ interval_midpoint <- function(time_string) {
   end_time <- parse_date_time(end, orders = "I:M p")
 
   midpoint <- start_time + (end_time - start_time) / 2
-  hms::as_hms(midpoint)
+  as_hms(midpoint)
 }
 
 interval_midpoint("12:00 a.m. to 12:04 a.m.")
 ```
 
+Our function seems to work as intended. It takes the string "12:00 a.m. to 12:04 a.m.", determines the two times of 12:00 am and 12:04am, then returns the middle of the two times at 12:02am. It uses a 24 hour clock and reports it as 00:02.
+
+Now, we need to take all of the possible time intervals in our JSON data and store them in a vector for quick look up. There are a total of 286 different responses for `JWAP`, so this vector is quite lengthy. First we will create the vector, and then name the elements with the values that the JSON data holds. We will repeat for `JWDP`. It would have been nice if the two had the same time intervals, but alas they do not. Therefore, we will use a second named lookup vector.
+
+The code for `jwap_times` and `jwdp_times` is very long! I have folded the code so that it doesn't take up half (or much more) of the html printout.
 
 ```{r}
+#| code-fold: TRUE
 jwap_time_lookup <- c(
     "12:00 a.m. to 12:04 a.m.",
     "12:05 a.m. to 12:09 a.m.",
@@ -361,11 +375,12 @@ jwap_time_lookup <- c(
     "0"
 )
 names(jwap_time_lookup) <- c(1:285,0)
-jwap_times <- sapply(jwap_time_lookup, 
+jwap_times <- lapply(jwap_time_lookup, 
                      interval_midpoint)
 ```
 
 ```{r}
+#| code-fold: TRUE
 jwdp_time_lookup <- c(
 
   "12:00 a.m. to 12:29 a.m.",
@@ -522,109 +537,25 @@ jwdp_time_lookup <- c(
 )
 
 names(jwdp_time_lookup) <-c(1:150,0)
-jwdp_times <- sapply(jwdp_time_lookup, 
+jwdp_times <- lapply(jwdp_time_lookup, 
                      interval_midpoint)
 ```
+
+To make sure that the times are correct, we will look at the head and tail of the two different variables to check.
 
 ```{r}
 head(jwap_times)
 ```
 
 ```{r}
-head(jwdp_times)
+tail(jwdp_times,10)
 ```
 
-```{r}
-census_rawdata_to_tibble <- function(raw_data) {
-  numeric_cols <- c("AGEP", "GASP", "GRPIP", "JWMNP", "PWGTP")
-  parsed <- fromJSON(rawToChar(raw_data$content))
-  data <- as_tibble(parsed[-1, ])
-  colnames(data) <- parsed[1, ]
-  if ("JWAP" %in% colnames(data)) {
-    data <- data |> 
-      mutate(
-        JWAP = jwap_time_lookup[JWAP]
-      )
-  }
-  if ("JWDP" %in% colnames(data)) {
-    data <- data |> 
-      mutate(
-        JWDP = jwdp_time_lookup[JWDP]
-      )
-  }
-  data <- data |>
-    mutate(across(any_of(numeric_cols), as.numeric)) |>
-    mutate(
-      JWAP = na_if(as.character(JWAP), "0"),
-      JWDP = na_if(as.character(JWDP), "0"),
-      JWAP = parse_hm(JWAP),
-      JWDP = parse_hm(JWDP)
-    )
-  if ("SEX" %in% colnames(data)) {
-      data$SEX = factor(data$SEX, 
-                        levels = c(1, 2),
-                        labels = c("Male", "Female"))
-        }
-  if ("FER" %in% colnames(data)) {
-      data$FER = factor(data$FER, 
-                        levels = c(0, 1, 2),
-                        labels = c("N/A (less than 15 years/greater than 50 years/ male)",
-                                   "Yes",
-                                   "No"))  
-      }
-  if ("HHL" %in% colnames(data)) {
-      data$HHL = factor(data$HHL, 
-                           levels = c(0, 1, 2, 3, 4, 5),
-                           labels = c("N/A (GQ/vacant)",
-                                      "English Only",
-                                      "Spanish",
-                                      "Other Indo-European languages",
-                                      "Asian and Pacific Island languages",
-                                      "Other Language"))
-        }
-  if ("SCL" %in% colnames(data)) {      
-      data$SCL = factor(data$SCL, 
-                           levels = c(0,1,2,3),
-                           labels = c("N/A (less than 3 years old)",
-                                      "No, has not attended in the last 3 months",
-                                      "Yes, public school or public college",
-                                      "Yes, private school or college or home school"))
-        }
-  if ("SCHL" %in% colnames(data)) {
-      data$SCHL = factor(data$SCHL, 
-                            levels = c(0:24),
-                            labels = c("N/A (less than 3 years old)",
-                                       "No schooling completed",
-                                       "Nursery school, preschool",
-                                       "Kindergarten",
-                                       "Grade 1",
-                                       "Grade 2",
-                                       "Grade 3",
-                                       "Grade 4",
-                                       "Grade 5",
-                                       "Grade 6",
-                                       "Grade 7",
-                                       "Grade 8",
-                                       "Grade 9",
-                                       "Grade 10",
-                                       "Grade 11",
-                                       "12th grade - no diploma",
-                                       "Regular high school diploma",
-                                       "GED or alternative credential",
-                                       "Some college, but less than 1 year",
-                                       "1 or more years of college credit, no degree",
-                                       "Associate's degree",
-                                       "Bachelor's degree",
-                                       "Master's degree",
-                                       "Professional degree beyond a bachelor's degree",
-                                       "Doctorate degree")
-                       )
-  }
-  class(data) <- c("census", class(data))
-  data
-}
-```
+Everything looks good!
 
+### State/Region Values
+
+The next function we need is one that will take a given state or area and convert it to a number for the URL to know where to the look. There are three different possible geographic areas: STATE, REGION, DIVISION. Each has different codes. STATE uses two digits. I will use 37 for the state of North Carolina for demonstration purposes. REGION and DIVISION use single digit codes. There are 4 regions and 9 divisions. If someone uses an incorrect value for one of the three geographic areas, the function should `stop` and give the appropraite error message.
 
 ```{r}
 help_codes <- function(geo, geo_name) {
@@ -687,10 +618,30 @@ help_codes <- function(geo, geo_name) {
   }
   code
 }
+```
 
+The below function call should work and return 37, which is the state code for North Carolina.
+
+```{r}
 help_codes("STATE", "NC")
 ```
-Now, these should not be character columns. We will fix that later if/when needed once we get our function running! Let's build that function.
+
+
+### URL Builder
+
+Now it is time to build our URL and `GET()` our results from said URL. Our function takes six different arguments.
+
+- Year, which is 2022 by default.
+
+- Num_Vars, our numeric varaibles, which is set to return AGEP and PWGTP by default. We want PWGTP to be returned every time. This will be taken care of within the function itself. We want at least one other numeric variable other than PWGTP. This is taken care of by checking the length of num_vars and comparing it to the number two (PWGTP plus one additional numeric variable.
+
+- Cat_Vars is the categorical variables, which is set to return SEX be default. We always want to have at least one Categorical variable in our function call. This is taken care of by checking the length of cat_vars and comparing it to the number 1.
+
+- Geo, which is STATE by default, is the type of geographical area we are interested in.
+
+- Geo_name, which is set to NC by default. The functions are set up to use either the state abbreviation or the corresponding code.
+
+- Key, which is set to my personal key default. Should my key fail to work at somepoint, or if someone wants to use their own key, they may adjust the key to their own personal key value.
 
 ```{r}
 single_year_rawdata <- function(year = 2022, 
@@ -756,16 +707,118 @@ single_year_rawdata <- function(year = 2022,
   print(url)
   results <- GET(url)
 }
+
+
 ```
+
+This will print out the correct URL.
+```{r}
+project_data <- single_year_rawdata(2019, num_vars = c("JWAP", "JWDP","AGEP"), cat_vars = c("SEX", "SCHL"))
+```
+This is what is returned to this point. If we look at `$content`, we can see that our data is still in the raw format. We need to write a function to be able to see our data in a format that makes sense to us!
+```{r}
+str(project_data, max.level = 1)
+```
+### Raw Data to Tibble
+Now it is time to take the Raw Data from our URL and turn it into a working tibble. We want to make sure that any numeric data is treated as numeric instead of a character vector. Then, we want to convert our time data into the correct midpoint of the given time interval. Lastly, we want to turn any character variable into a factor variable using the given factors from the US Census website.
 
 ```{r}
-trial_dat <- single_year_rawdata(2019, num_vars = c("JWAP", "JWDP"), cat_vars = c("SEX", "SCHL"))
-trial_data <- census_rawdata_to_tibble(trial_dat)
-
-str(trial_data)
-head(trial_data, 50)
+census_rawdata_to_tibble <- function(raw_data) {
+  numeric_cols <- c("AGEP", "GASP", "GRPIP", "JWMNP", "PWGTP")
+  parsed <- fromJSON(rawToChar(raw_data$content))
+  data <- as_tibble(parsed[-1, ])
+  colnames(data) <- parsed[1, ]
+  if ("JWAP" %in% colnames(data)) {
+    data <- data |> 
+      mutate(
+        JWAP = jwap_time_lookup[JWAP]
+      )
+  }
+  if ("JWDP" %in% colnames(data)) {
+    data <- data |> 
+      mutate(
+        JWDP = jwdp_time_lookup[JWDP]
+      )
+  }
+  data <- data |>
+    mutate(across(any_of(numeric_cols), as.numeric))
+  if ("SEX" %in% colnames(data)) {
+      data$SEX = factor(data$SEX, 
+                        levels = c(1, 2),
+                        labels = c("Male", "Female"))
+        }
+  if ("FER" %in% colnames(data)) {
+      data$FER = factor(data$FER, 
+                        levels = c(0, 1, 2),
+                        labels = c("N/A (less than 15 years/greater than 50 years/ male)",
+                                   "Yes",
+                                   "No"))  
+      }
+  if ("HHL" %in% colnames(data)) {
+      data$HHL = factor(data$HHL, 
+                        levels = c(0, 1, 2, 3, 4, 5),
+                        labels = c("N/A (GQ/vacant)",
+                                      "English Only",
+                                      "Spanish",
+                                      "Other Indo-European languages",
+                                      "Asian and Pacific Island languages",
+                                      "Other Language"))
+        }
+  if ("SCL" %in% colnames(data)) {      
+      data$SCL = factor(data$SCL, 
+                        levels = c(0,1,2,3),
+                        labels = c("N/A (less than 3 years old)",
+                                   "No, has not attended in the last 3 months",
+                                   "Yes, public school or public college",
+                                   "Yes, private school or college or home school"))
+        }
+  if ("SCHL" %in% colnames(data)) {
+      data$SCHL = factor(data$SCHL, 
+                         levels = c(0:24),
+                         labels = c("N/A (less than 3 years old)",
+                                       "No schooling completed",
+                                       "Nursery school, preschool",
+                                       "Kindergarten",
+                                       "Grade 1",
+                                       "Grade 2",
+                                       "Grade 3",
+                                       "Grade 4",
+                                       "Grade 5",
+                                       "Grade 6",
+                                       "Grade 7",
+                                       "Grade 8",
+                                       "Grade 9",
+                                       "Grade 10",
+                                       "Grade 11",
+                                       "12th grade - no diploma",
+                                       "Regular high school diploma",
+                                       "GED or alternative credential",
+                                       "Some college, but less than 1 year",
+                                       "1 or more years of college credit, no degree",
+                                       "Associate's degree",
+                                       "Bachelor's degree",
+                                       "Master's degree",
+                                       "Professional degree beyond a bachelor's degree",
+                                       "Doctorate degree")
+                       )
+  }
+  class(data) <- c("census", class(data))
+  data
+}
 ```
+At the end, we also added a class to this data called `census`. This will allow us to summarize and plot census data later in the document.
 
+
+```{r}
+project_tibble <- census_rawdata_to_tibble(project_data)
+
+str(project_tibble)
+head(project_tibble, 50)
+```
+Everything looks good to me!
+
+## Multiple Years of Data
+Now that we have a function that will return a single year's worth of data, let us create a function that will return multiple years' worth of data. We will ignore 2020 due to COVID influencing our data. The general idea is to get a tibble from each of the provided years and then bind the rows together.
 
 ```{r}
 multiple_years_data <- function(years,
@@ -796,14 +849,20 @@ multiple_years_data <- function(years,
 }
 ```
 
-
 ```{r}
-trial_multiyear_data <- multiple_years_data(years = c(2019, 2021), num_vars = c("AGEP", "GASP", "GRPIP", "JWAP", "JWDP", "JWMNP", "PWGTP"), cat_vars = c("FER", "HHL", "SCH", "SCHL", "SEX"))
+multiyear_project_tibble <- multiple_years_data(years = c(2019, 2021), num_vars = c("AGEP", "GASP", "GRPIP", "JWAP", "JWDP", "JWMNP", "PWGTP"), cat_vars = c("FER", "HHL", "SCH", "SCHL", "SEX"))
 
-head(trial_multiyear_data, 10)
-class(trial_multiyear_data)
+head(multiyear_project_tibble, 10)
+class(multiyear_project_tibble)
 ```
+The data looks good, and we can see that the `census` class still applies to our tibble for multiple years of data.
 
+## Summarizing
+Now that we have our data, let's summarize it! 
+
+### Weighted Helper Functions
+
+`PWGTP` is considered a weight of many different responses. Therefore, tradition mean and standard deviation functions will not work. We need to create two functions for the the weighted mean and weighted standard deviation. 
 
 ```{r}
 weighted_mean <- function(col, weight) {
@@ -818,21 +877,25 @@ weighted_sd <- function(col, weight) {
 }
 ```
 
-
+### Summary Function
+We want to return the weighted mean and standard deviation of all numeric data and the counts of the categorical data.
 
 ```{r}
 summary.census <- function(data, num_vars = NULL, cat_vars = NULL) {
+  
   if (is.null(num_vars)) {
     num_vars <- data |> 
       select(where(is.numeric)) |> 
       names()
     num_vars <- setdiff(num_vars, c("year","PWGTP"))
   }
+  
   if (is.null(cat_vars)) {
     cat_vars <- data |>
       select(where(is.factor)) |>
       names()
   }
+  
   numerical_summary <- data |> 
     summarise(
       across(
@@ -841,13 +904,13 @@ summary.census <- function(data, num_vars = NULL, cat_vars = NULL) {
           mean = ~ weighted_mean(.x, PWGTP),
           sd   = ~ weighted_sd(.x, PWGTP)
           ),
-        .names = "{.col}_{.fn}") |>
+        .names = "{.col}_{.fn}")
+    ) |>
     pivot_longer(
       everything(),
       names_to = c("variable", "statistic"),
       names_sep = "_",
       values_to = "value"
-    )
     )
   
   categorical_summary <- data |>
@@ -868,10 +931,19 @@ summary.census <- function(data, num_vars = NULL, cat_vars = NULL) {
 
 
 ```{r}
-project_summary <- summary(trial_multiyear_data)
-project_summary$Categorical_Summary
+project_summary <- summary(multiyear_project_tibble)
 ```
 
+Since our summaries are returned in a named list, we can call the individual summaries for either the categorical variables or the numeric variables.
+```{r}
+project_summary$Categorical_Summary
+
+project_summary$Numeric_Summary
+```
+
+## Plotting Our Data
+
+Finally, we want to be able to plot our data in a good format. This function takes one numeric and one categorical variable to and weighted by `PWGTP`. The x-axis will be split by the different factors of the categorical variable. A boxplot will be created for each factor of the categorical data for the given numeric variable. For better readability, the x-axis labels have been rotated 45 degrees.
 ```{r}
 plot.census <- function(data, num_var, cat_var) {
   ggplot(
@@ -892,6 +964,10 @@ plot.census <- function(data, num_var, cat_var) {
       axis.text.x = element_text(angle = 45, hjust = 1)
   )
 }
-
-plot(trial_multiyear_data, num_var = "AGEP", cat_var = "HHL")
 ```
+
+Let's test it to see if it works!
+```{r}
+plot(multiyear_project_tibble, num_var = "AGEP", cat_var = "HHL")
+```
+We have created a boxplot for the AGE for Household Language. Given some time, I would like to create a named vected that houses all the variables and their abbreviations. Therefore the x-axis could say something better than HHL. 
