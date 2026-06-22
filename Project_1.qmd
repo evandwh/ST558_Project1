@@ -39,6 +39,10 @@ str(data)
 
 ```{r}
 interval_midpoint <- function(time_string) {
+  
+  if (time_string == "0") {
+    return(hms::as_hms(NA))
+  }
 
   pieces <- str_split(time_string, " to ", simplify = TRUE)
 
@@ -55,15 +59,14 @@ interval_midpoint <- function(time_string) {
   end_time <- parse_date_time(end, orders = "I:M p")
 
   midpoint <- start_time + (end_time - start_time) / 2
-  format(midpoint, "%H:%M")
-  midpoint
+  hms::as_hms(midpoint)
 }
 
-interval_midpoint("10:20 p.m. to 10:24 p.m.")
+interval_midpoint("12:00 a.m. to 12:04 a.m.")
 ```
 
 
-```{r, echo=FALSE}
+```{r}
 jwap_time_lookup <- c(
     "12:00 a.m. to 12:04 a.m.",
     "12:05 a.m. to 12:09 a.m.",
@@ -350,11 +353,14 @@ jwap_time_lookup <- c(
     "11:45 p.m. to 11:49 p.m.",
     "11:50 p.m. to 11:54 p.m.",
     "11:55 p.m. to 11:59 p.m.",
-    "N/A (not a worker; worker who worked from home)"
+    "0"
 )
-jwap_time_lookup <- sapply(jwap_time_lookup, interval_midpoint)
-names(jwap_time_lookup) <- c(1:285, 0)
+names(jwap_time_lookup) <- c(1:285,0)
+jwap_times <- sapply(jwap_time_lookup, 
+                     interval_midpoint)
+```
 
+```{r}
 jwdp_time_lookup <- c(
 
   "12:00 a.m. to 12:29 a.m.",
@@ -507,19 +513,20 @@ jwdp_time_lookup <- c(
   "10:50 p.m. to 10:59 p.m.",
   "11:00 p.m. to 11:29 p.m.",
   "11:30 p.m. to 11:59 p.m.",
-  "N/A (not a worker; worked from home)"
+  "0"
 )
 
-jwdp_time_lookup <- sapply(jwdp_time_lookup, interval_midpoint)
-names(jwdp_time_lookup) <-c(1:150, 0)
+names(jwdp_time_lookup) <-c(1:150,0)
+jwdp_times <- sapply(jwdp_time_lookup, 
+                     interval_midpoint)
 ```
 
 ```{r}
-head(jwap_time_lookup)
+head(jwap_times)
 ```
 
 ```{r}
-head(jwdp_time_lookup)
+head(jwdp_times)
 ```
 
 ```{r}
