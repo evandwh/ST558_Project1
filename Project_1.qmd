@@ -15,6 +15,9 @@ library(dplyr)
 library(stringr)
 library(lubridate)
 library(hms)
+library(tidyr)
+library(ggplot2)
+library(quantreg)
 
 
 key <- "70c77fa9cc244f5a9fb3c46ed731835d132c0670"
@@ -33,7 +36,34 @@ colnames(data) <- parsed[1, ]
 str(data)
 ```
 
+
 ```{r}
+interval_midpoint <- function(time_string) {
+
+  pieces <- str_split(time_string, " to ", simplify = TRUE)
+
+  start <- str_trim(pieces[1])
+  end <- str_trim(pieces[2])
+  
+  start <- str_replace_all(start, " a.m.", " AM")
+  start <- str_replace_all(start, " p.m.", " PM")
+  
+  end <- str_replace_all(end, " a.m.", " AM")
+  end <- str_replace_all(end, " p.m.", " PM")
+  
+  start_time <- parse_date_time(start, orders = "I:M p")
+  end_time <- parse_date_time(end, orders = "I:M p")
+
+  midpoint <- start_time + (end_time - start_time) / 2
+  format(midpoint, "%H:%M")
+  midpoint
+}
+
+interval_midpoint("10:20 p.m. to 10:24 p.m.")
+```
+
+
+```{r, echo=FALSE}
 jwap_time_lookup <- c(
     "12:00 a.m. to 12:04 a.m.",
     "12:05 a.m. to 12:09 a.m.",
@@ -322,14 +352,9 @@ jwap_time_lookup <- c(
     "11:55 p.m. to 11:59 p.m.",
     "N/A (not a worker; worker who worked from home)"
 )
-
 jwap_time_lookup <- sapply(jwap_time_lookup, interval_midpoint)
-
 names(jwap_time_lookup) <- c(1:285, 0)
-head(jwap_time_lookup)
-```
 
-```{r}
 jwdp_time_lookup <- c(
 
   "12:00 a.m. to 12:29 a.m.",
@@ -487,31 +512,14 @@ jwdp_time_lookup <- c(
 
 jwdp_time_lookup <- sapply(jwdp_time_lookup, interval_midpoint)
 names(jwdp_time_lookup) <-c(1:150, 0)
-head(jwdp_time_lookup)
 ```
 
 ```{r}
-interval_midpoint <- function(time_string) {
+head(jwap_time_lookup)
+```
 
-  pieces <- str_split(time_string, " to ", simplify = TRUE)
-
-  start <- str_trim(pieces[1])
-  end <- str_trim(pieces[2])
-  
-  start <- str_replace_all(start, " a.m.", " AM")
-  start <- str_replace_all(start, " p.m.", " PM")
-  
-  end <- str_replace_all(end, " a.m.", " AM")
-  end <- str_replace_all(end, " p.m.", " PM")
-  
-  start_time <- parse_date_time(start, orders = "I:M p")
-  end_time <- parse_date_time(end, orders = "I:M p")
-
-  midpoint <- midpoint <- start_time + (end_time - start_time) / 2
-  midpoint
-}
-
-interval_midpoint("10:20 p.m. to 10:24 p.m.")
+```{r}
+head(jwdp_time_lookup)
 ```
 
 ```{r}
@@ -668,9 +676,7 @@ help_codes <- function(geo, geo_name) {
   code
 }
 
-help_help_codes("STATE", "NC")
-
-help_help_codes("REGION", "NC") #Should fail!
+help_codes("STATE", "NC")
 ```
 Now, these should not be character columns. We will fix that later if/when needed once we get our function running! Let's build that function.
 
@@ -680,7 +686,7 @@ single_year_rawdata <- function(year = 2022,
                        cat_vars = c("SEX"), #SEX by default
                        geo = "STATE",       #State by default
                        geo_name = "NC",
-                       key = "70c77fa9cc244f5a9fb3c46ed731835d132c0670") {   #North Carolina by default
+                       key = "70c77fa9cc244f5a9fb3c46ed731835d132c0670") {
   num_vars <- toupper(num_vars)
   cat_vars <- toupper(cat_vars)
   geo <- toupper(geo)
@@ -721,7 +727,7 @@ single_year_rawdata <- function(year = 2022,
     code <- "*"
   }
   else {
-    code <- help_help_codes(geo, geo_name)
+    code <- help_codes(geo, geo_name)
   }
   geo_string <- paste0(geo_string,":",code)
   num_string <- paste(num_vars, collapse = ",")
@@ -780,35 +786,100 @@ multiple_years_data <- function(years,
 
 
 ```{r}
-trial_dat <- multiple_years_data(years = c(2020, 2021), num_vars = c("JWAP", "JWDP"), cat_vars = c("SEX", "SCHL"))
+trial_multiyear_data <- multiple_years_data(years = c(2019, 2021), num_vars = c("AGEP", "GASP", "GRPIP", "JWAP", "JWDP", "JWMNP", "PWGTP"), cat_vars = c("FER", "HHL", "SCH", "SCHL", "SEX"))
 
-head(trial_dat, 10)
-class(trial_dat)
+head(trial_multiyear_data, 10)
+class(trial_multiyear_data)
 ```
 
 
 ```{r}
-#Run these in your console
-plot.function #what is used for a class = function
-getS3method("plot","data.frame") #what is used for a class = data frame
-plot
+weighted_mean <- function(col, weight) {
+  sum(col * weight, na.rm = TRUE) / sum(weight, na.rm = TRUE)
+}
+
+weighted_sd <- function(col, weight) {
+  mu <- weighted_mean(col, weight)
+  sqrt(
+    sum(col^2 * weight, na.rm = TRUE) / sum(weight, na.rm = TRUE) - mu^2
+  )
+}
 ```
+
 
 
 ```{r}
 summary.census <- function(data, num_vars = NULL, cat_vars = NULL) {
-  if (is.Null(num_vars)) {
+  if (is.null(num_vars)) {
     num_vars <- data |> 
       select(where(is.numeric)) |> 
       names()
-    num_vars <- setdiff(numeric_cols, "PWGTP")
+    num_vars <- setdiff(num_vars, c("year","PWGTP"))
   }
-  if (is.Null(cat_vars)) {
+  if (is.null(cat_vars)) {
     cat_vars <- data |>
       select(where(is.factor)) |>
       names()
   }
+  numerical_summary <- data |> 
+    summarise(
+      across(
+        all_of(num_vars), 
+        list(
+          mean = ~ weighted_mean(.x, PWGTP),
+          sd   = ~ weighted_sd(.x, PWGTP)
+          ),
+        .names = "{.col}_{.fn}") |>
+    pivot_longer(
+      everything(),
+      names_to = c("variable", "statistic"),
+      names_sep = "_",
+      values_to = "value"
+    )
+    )
   
+  categorical_summary <- data |>
+    pivot_longer(
+      cols = all_of(cat_vars),
+      names_to = "variable",
+      values_to = "level"
+    ) |>
+    count(variable, level)
+  
+  full_summary <- list(
+    "Numeric_Summary" = numerical_summary, 
+    "Categorical_Summary" = categorical_summary)
+  full_summary
 }
+
 ```
 
+
+```{r}
+project_summary <- summary(trial_multiyear_data)
+project_summary$Categorical_Summary
+```
+
+```{r}
+plot.census <- function(data, num_var, cat_var) {
+  ggplot(
+    data,
+    aes(
+      x = get(cat_var),
+      y = get(num_var),
+      weight = PWGTP
+    )
+  ) +
+    geom_boxplot() +
+    labs(
+      x = cat_var,
+      y = num_var,
+      title = paste(num_var, "by", cat_var)
+  ) + 
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+}
+
+plot(trial_multiyear_data, num_var = "AGEP", cat_var = "HHL")
+```
