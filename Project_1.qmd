@@ -971,3 +971,43 @@ Let's test it to see if it works!
 plot(multiyear_project_tibble, num_var = "AGEP", cat_var = "HHL")
 ```
 We have created a boxplot for the AGE for Household Language. Given some time, I would like to create a named vected that houses all the variables and their abbreviations. Therefore the x-axis could say something better than HHL. 
+
+## Narrative Section
+
+I am interested in the travel time for work after completing different levels of education. 
+Does having more or higher education cause you to the luxury of living closer to your job? Or does it allow you to live further out in suburban areas and thus have to travel more for work to get a higher paying jub?
+
+```{r}
+nar_tibble <- multiple_years_data(years = c(2021, 2022), 
+                                  num_vars = c("JWMNP"), 
+                                  cat_vars = c("SCHL"), 
+                                  geo = "STATE", 
+                                  geo_name = "NC")
+```
+Let's look at the summary statistics.
+```{r}
+head(nar_tibble)
+
+summary(nar_tibble)
+```
+The average commute is 9.62 minutes but with a standard deviation of 17.82 minutes. These values are clearly going to be right skewed. I wish we had access ` to the median in our summary. Then we can detect how skewed the data was. It would also allow us to compare to the box-plots produced by `plot()`.
+
+```{r}
+plot(nar_tibble, num_var = "JWMNP", cat_var = "SCHL")
+```
+
+Now, most of these box-plots do not provide much information. There are a few interesting things to not though. Not surprisingly, those that have not completed high school do not have travel times for work, as most of these people who not be working. However, what is surprising to me, is that there are values for travel time for work for people who have only completely Kindergarten. 
+
+- Are these all errors? 
+
+- Are these parents who entered their own travel time for their child?
+
+- Are these people that put travel time to school?
+
+Another interesting thing is that the Q3 value and maximum values for anyone with a high school diploma is relatively equivalent regardless of how any other college degree.
+
+The medians for almost every education level is relatively close to zero for all but three degrees (associates, professional, and doctorate).
+
+I'd like to create a function that would provide the numerical summary statistics for any numeric variable across the different levels of a factor variable. Then we could compare these different values using numbers instead of these graphs.
+
+Furthermore, we could assign a numeric values to each category of the education level, given that most are sequential, and look for the correlation between education level and travel time for work.

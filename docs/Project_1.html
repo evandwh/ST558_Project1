@@ -915,8 +915,8 @@ NA</code></pre>
  $ all_headers:List of 1
  $ cookies    :'data.frame':    1 obs. of  7 variables:
  $ content    : raw [1:3737487] 5b 5b 22 53 ...
- $ date       : POSIXct[1:1], format: "2026-06-22 18:20:12"
- $ times      : Named num [1:6] 0 0.000053 0 0.00019 0.691647 ...
+ $ date       : POSIXct[1:1], format: "2026-06-23 02:05:30"
+ $ times      : Named num [1:6] 0 0.000249 0 0.000552 0.625545 ...
   ..- attr(*, "names")= chr [1:6] "redirect" "namelookup" "connect" "pretransfer" ...
  $ request    :List of 7
   ..- attr(*, "class")= chr "request"
@@ -1255,6 +1255,82 @@ NA</code></pre>
 </div>
 </div>
 <p>We have created a boxplot for the AGE for Household Language. Given some time, I would like to create a named vected that houses all the variables and their abbreviations. Therefore the x-axis could say something better than HHL.</p>
+</section>
+<section id="narrative-section" class="level2">
+<h2 class="anchored" data-anchor-id="narrative-section">Narrative Section</h2>
+<p>I am interested in the travel time for work after completing different levels of education. Does having more or higher education cause you to the luxury of living closer to your job? Or does it allow you to live further out in suburban areas and thus have to travel more for work to get a higher paying jub?</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>nar_tibble <span class="ot">&lt;-</span> <span class="fu">multiple_years_data</span>(<span class="at">years =</span> <span class="fu">c</span>(<span class="dv">2021</span>, <span class="dv">2022</span>), </span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">num_vars =</span> <span class="fu">c</span>(<span class="st">"JWMNP"</span>), </span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">cat_vars =</span> <span class="fu">c</span>(<span class="st">"SCHL"</span>), </span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">geo =</span> <span class="st">"STATE"</span>, </span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">geo_name =</span> <span class="st">"NC"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "https://api.census.gov/data/2021/acs/acs1/pums?get=SCHL,JWMNP,PWGTP&amp;for=STATE:37&amp;key=70c77fa9cc244f5a9fb3c46ed731835d132c0670"
+[1] "https://api.census.gov/data/2022/acs/acs1/pums?get=SCHL,JWMNP,PWGTP&amp;for=STATE:37&amp;key=70c77fa9cc244f5a9fb3c46ed731835d132c0670"</code></pre>
+</div>
+</div>
+<p>Let’s look at the summary statistics.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(nar_tibble)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 6 × 5
+  SCHL                                         JWMNP PWGTP state  year
+  &lt;fct&gt;                                        &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt; &lt;dbl&gt;
+1 1 or more years of college credit, no degree     5    78 37     2021
+2 Regular high school diploma                      0     9 37     2021
+3 1 or more years of college credit, no degree     0    32 37     2021
+4 12th grade - no diploma                          0     6 37     2021
+5 1 or more years of college credit, no degree     5   119 37     2021
+6 1 or more years of college credit, no degree     0    65 37     2021</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(nar_tibble)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>$Numeric_Summary
+# A tibble: 2 × 3
+  variable statistic value
+  &lt;chr&gt;    &lt;chr&gt;     &lt;dbl&gt;
+1 JWMNP    mean       9.62
+2 JWMNP    sd        17.8 
+
+$Categorical_Summary
+# A tibble: 25 × 3
+   variable level                           n
+   &lt;chr&gt;    &lt;fct&gt;                       &lt;int&gt;
+ 1 SCHL     N/A (less than 3 years old)  5477
+ 2 SCHL     No schooling completed       6177
+ 3 SCHL     Nursery school, preschool    2650
+ 4 SCHL     Kindergarten                 2221
+ 5 SCHL     Grade 1                      2082
+ 6 SCHL     Grade 2                      2262
+ 7 SCHL     Grade 3                      2399
+ 8 SCHL     Grade 4                      2390
+ 9 SCHL     Grade 5                      2617
+10 SCHL     Grade 6                      3011
+# ℹ 15 more rows</code></pre>
+</div>
+</div>
+<p>The average commute is 9.62 minutes but with a standard deviation of 17.82 minutes. These values are clearly going to be right skewed. I wish we had access <code>to the median in our summary. Then we can detect how skewed the data was. It would also allow us to compare to the box-plots produced by</code>plot()`.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(nar_tibble, <span class="at">num_var =</span> <span class="st">"JWMNP"</span>, <span class="at">cat_var =</span> <span class="st">"SCHL"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Project_1_files/figure-html/unnamed-chunk-25-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Now, most of these box-plots do not provide much information. There are a few interesting things to not though. Not surprisingly, those that have not completed high school do not have travel times for work, as most of these people who not be working. However, what is surprising to me, is that there are values for travel time for work for people who have only completely Kindergarten.</p>
+<ul>
+<li><p>Are these all errors?</p></li>
+<li><p>Are these parents who entered their own travel time for their child?</p></li>
+<li><p>Are these people that put travel time to school?</p></li>
+</ul>
+<p>Another interesting thing is that the Q3 value and maximum values for anyone with a high school diploma is relatively equivalent regardless of how any other college degree.</p>
+<p>The medians for almost every education level is relatively close to zero for all but three degrees (associates, professional, and doctorate).</p>
+<p>I’d like to create a function that would provide the numerical summary statistics for any numeric variable across the different levels of a factor variable. Then we could compare these different values using numbers instead of these graphs.</p>
+<p>Furthermore, we could assign a numeric values to each category of the education level, given that most are sequential, and look for the correlation between education level and travel time for work.</p>
 
 
 </section>
